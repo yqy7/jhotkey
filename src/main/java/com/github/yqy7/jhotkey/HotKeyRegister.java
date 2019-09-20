@@ -1,6 +1,5 @@
 package com.github.yqy7.jhotkey;
 
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 

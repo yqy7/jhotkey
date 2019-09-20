@@ -4,9 +4,13 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.sun.jna.platform.win32.Kernel32;
 import com.sun.jna.platform.win32.User32;
+import com.sun.jna.platform.win32.WinDef.LPARAM;
+import com.sun.jna.platform.win32.WinDef.WPARAM;
 import com.sun.jna.platform.win32.WinUser;
 import com.sun.jna.platform.win32.WinUser.MSG;
 import org.slf4j.Logger;
@@ -15,28 +19,34 @@ import org.slf4j.LoggerFactory;
 class HotKeyRegisterWin extends HotKeyRegister {
     private static Logger logger = LoggerFactory.getLogger(HotKeyRegisterWin.class);
 
-    private Map<Integer, HotKey> hotKeyMap;
-    private Queue<HotKey> registerQueue;
-    private AtomicInteger hotkeyIdGen;
-    private volatile boolean stoped;
-    private boolean clearAllHotKey;
+    private static int WM_USER_REGISTER_HOTKEY = 1;
+    private static int WM_USER_CLEAR_HOTKEY = 2;
+
+    private Map<Integer, HotKey> hotKeyMap = new HashMap<>();
+    private Queue<HotKey> registerQueue = new LinkedList<>();
+    private AtomicInteger hotKeyIdGen = new AtomicInteger(0);
+    private volatile int nativeThreadId = -1;
+    private CountDownLatch prepareLatch = new CountDownLatch(1);
 
     @Override
     protected void init() {
-        hotKeyMap = new HashMap<>();
-        registerQueue = new LinkedList<>();
-        hotkeyIdGen = new AtomicInteger(0);
-        stoped = false;
-        clearAllHotKey = false;
 
         Thread thread = new Thread(() -> {
             MSG msg = new MSG();
-            while (!stoped) {
-                // 检查消息
-                while (User32.INSTANCE.PeekMessage(msg, null, 0, 0, 1)) {
-                    // 处理hotkey消息
-                    if (msg.message != WinUser.WM_HOTKEY) { continue; }
 
+            User32.INSTANCE.PeekMessage(msg, null, 0, 0, 1); // 触发一下，使线程变成GUI线程
+            nativeThreadId = Kernel32.INSTANCE.GetCurrentThreadId();
+
+            prepareLatch.countDown(); // 准备完成，可以注册了
+
+            // 消息循环
+            while (User32.INSTANCE.GetMessage(msg, null, 0, 0) != 0) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Windows Message: \n" + msg.toString());
+                }
+
+                // 处理hotkey消息
+                if (msg.message == WinUser.WM_HOTKEY) {
                     int id = msg.wParam.intValue();
                     HotKey hotKey = hotKeyMap.get(id);
                     if (hotKey == null) { continue; }
@@ -44,41 +54,37 @@ class HotKeyRegisterWin extends HotKeyRegister {
                     fireEvent(hotKey);
                 }
 
-                synchronized (HotKeyRegisterWin.this) {
+                if (msg.message == WinUser.WM_USER && msg.wParam.intValue() == WM_USER_REGISTER_HOTKEY) {
                     while (!registerQueue.isEmpty()) {
-                        // 注册hotkey
                         registerHotKey(registerQueue.poll());
                     }
-
-                    if (clearAllHotKey) {
-                        for (Integer id : hotKeyMap.keySet()) {
-                            User32.INSTANCE.UnregisterHotKey(null, id);
-                        }
-                        hotKeyMap.clear();
-                        clearAllHotKey = false;
-                    }
                 }
 
-                Thread.yield();
-            }
+                if (msg.message == WinUser.WM_USER && msg.wParam.intValue() == WM_USER_CLEAR_HOTKEY) {
+                    clearHotKeys();
+                }
 
-            // 线程停止前先把 HotKey 删除
-            synchronized (HotKeyRegisterWin.this) {
-                if (clearAllHotKey) {
-                    for (Integer id : hotKeyMap.keySet()) {
-                        User32.INSTANCE.UnregisterHotKey(null, id);
-                    }
-                    hotKeyMap.clear();
+                if (msg.message == WinUser.WM_CLOSE) {
+                    clearHotKeys();
+                    break;
                 }
             }
-
         }, "JHotKey Thread");
         thread.setDaemon(true);
         thread.start();
     }
 
+    // 清除所有注册的 hotkey
+    private void clearHotKeys() {
+        for (Integer id : hotKeyMap.keySet()) {
+            User32.INSTANCE.UnregisterHotKey(null, id);
+        }
+        hotKeyMap.clear();
+    }
+
+    // 注册hotkey
     private void registerHotKey(HotKey hotKey) {
-        int id = hotkeyIdGen.incrementAndGet();
+        int id = hotKeyIdGen.incrementAndGet();
         if (User32.INSTANCE.RegisterHotKey(null, id,
             KeyMapWin.convertModifiers(hotKey.getModifiers()),
             KeyMapWin.converKeyCode(hotKey.getKeyCode()))) {
@@ -92,17 +98,37 @@ class HotKeyRegisterWin extends HotKeyRegister {
     @Override
     protected synchronized void register(HotKey hotKey) {
         registerQueue.offer(hotKey);
+        try {
+            prepareLatch.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        User32.INSTANCE.PostThreadMessage(nativeThreadId, WinUser.WM_USER, new WPARAM(WM_USER_REGISTER_HOTKEY),
+            new LPARAM());
     }
 
     @Override
     public synchronized void removeAllHotKey() {
-        clearAllHotKey = true;
+        try {
+            prepareLatch.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        User32.INSTANCE.PostThreadMessage(nativeThreadId, WinUser.WM_USER, new WPARAM(WM_USER_CLEAR_HOTKEY),
+            new LPARAM());
     }
 
     @Override
     public void stop() {
-        removeAllHotKey();
-        stoped = true;
+        try {
+            prepareLatch.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        User32.INSTANCE.PostThreadMessage(nativeThreadId, WinUser.WM_CLOSE, new WPARAM(), new LPARAM());
         super.stop();
     }
 

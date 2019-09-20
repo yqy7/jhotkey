@@ -1,10 +1,10 @@
 package com.github.yqy7.jhotkey;
 
 public class HotKeyModifier {
-    public static final int CTRL_MASK           = 1 << 1;
-    public static final int META_MASK           = 1 << 2;
-    public static final int ALT_MASK            = 1 << 3;
-    public static final int SHIFT_MASK          = 1 << 0;
+    public static final int CTRL_MASK = 1 << 1;
+    public static final int META_MASK = 1 << 2;
+    public static final int ALT_MASK = 1 << 3;
+    public static final int SHIFT_MASK = 1 << 0;
 
     public static Integer getModifier(String s) {
         switch (s.toUpperCase()) {
