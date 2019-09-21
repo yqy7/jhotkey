@@ -17,14 +17,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 class HotKeyRegisterWin extends HotKeyRegister {
-    private static Logger logger = LoggerFactory.getLogger(HotKeyRegisterWin.class);
+    private static final Logger logger = LoggerFactory.getLogger(HotKeyRegisterWin.class);
 
     private static int WM_USER_REGISTER_HOTKEY = 1;
     private static int WM_USER_CLEAR_HOTKEY = 2;
 
+    private AtomicInteger hotKeyIdGen = new AtomicInteger(1);
     private Map<Integer, HotKey> hotKeyMap = new HashMap<>();
     private Queue<HotKey> registerQueue = new LinkedList<>();
-    private AtomicInteger hotKeyIdGen = new AtomicInteger(0);
+
     private volatile int nativeThreadId = -1;
     private CountDownLatch prepareLatch = new CountDownLatch(1);
 
@@ -70,7 +71,6 @@ class HotKeyRegisterWin extends HotKeyRegister {
                 }
             }
         }, "JHotKey Thread");
-        thread.setDaemon(true);
         thread.start();
     }
 
@@ -84,7 +84,7 @@ class HotKeyRegisterWin extends HotKeyRegister {
 
     // 注册hotkey
     private void registerHotKey(HotKey hotKey) {
-        int id = hotKeyIdGen.incrementAndGet();
+        int id = hotKeyIdGen.getAndIncrement();
         if (User32.INSTANCE.RegisterHotKey(null, id,
             KeyMapWin.convertModifiers(hotKey.getModifiers()),
             KeyMapWin.converKeyCode(hotKey.getKeyCode()))) {
@@ -121,7 +121,7 @@ class HotKeyRegisterWin extends HotKeyRegister {
     }
 
     @Override
-    public void stop() {
+    public synchronized void stop() {
         try {
             prepareLatch.await();
         } catch (InterruptedException e) {

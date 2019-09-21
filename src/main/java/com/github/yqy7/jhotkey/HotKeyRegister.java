@@ -11,6 +11,8 @@ public abstract class HotKeyRegister {
     private static HotKeyRegister INSTANCE;
 
     static {
+        System.setProperty("jna.nosys", "true");
+
         if (Platform.isWindows()) {
             INSTANCE = new HotKeyRegisterWin();
         }
@@ -47,13 +49,8 @@ public abstract class HotKeyRegister {
     protected abstract void register(HotKey hotKey);
 
     /**
-     * hotkeyString的格式： meta ctrl shift alt key <br/>
-     * meta即 windows 的 win 键或者 mac 的 command 键 <br/>
-     * key为 0-9 或者 a-z 或者 F1-F12 <br/>
-     * 例1： meta a <br/>
-     * 例2： meta ctrl 9 <br/>
-     * 例3： meta ctrl alt 3 <br/>
-     * 例4： meta ctrl shift alt F1 <br/>
+     * hotkeyString的格式： meta ctrl shift alt key <br/> meta即 windows 的 win 键或者 mac 的 command 键 <br/> key为 0-9 或者 a-z 或者
+     * F1-F12 <br/> 例1： meta a <br/> 例2： meta ctrl 9 <br/> 例3： meta ctrl alt 3 <br/> 例4： meta ctrl shift alt F1 <br/>
      *
      * @param hotkeyString
      * @param hotKeyListener

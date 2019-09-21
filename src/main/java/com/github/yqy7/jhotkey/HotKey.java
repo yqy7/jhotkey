@@ -7,7 +7,7 @@ public class HotKey {
     private int keyCode;
     private HotKeyListener listener;
 
-    private HotKey() { }
+    protected HotKey() { }
 
     public int getModifiers() {
         return modifiers;
@@ -74,7 +74,7 @@ public class HotKey {
         String modifiersText = HotKeyModifier.getModifiersText(modifiers);
         if (modifiersText != null) {
             stringBuilder.append(" ");
-            stringBuilder.append(modifiers);
+            stringBuilder.append(modifiersText);
         }
 
         String keyCodeText = HotKeyVK.getKeyCodeText(keyCode);
