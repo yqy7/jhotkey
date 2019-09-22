@@ -1,20 +1,66 @@
 package com.github.yqy7.jhotkey;
 
+import java.awt.*;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-
 import com.sun.jna.Pointer;
 import com.sun.jna.platform.mac.Carbon;
-import com.sun.jna.platform.mac.Carbon.EventHandlerProcPtr;
 import com.sun.jna.platform.mac.Carbon.EventHotKeyID;
 import com.sun.jna.platform.mac.Carbon.EventTypeSpec;
 import com.sun.jna.ptr.PointerByReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.github.yqy7.jhotkey.HotKeyVK.*;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_0;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_1;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_2;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_3;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_4;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_5;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_6;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_7;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_8;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_9;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_A;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_B;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_C;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_D;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_E;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F1;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F10;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F11;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F12;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F2;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F3;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F4;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F5;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F6;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F7;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F8;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_F9;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_G;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_H;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_I;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_J;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_K;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_L;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_M;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_N;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_O;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_P;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_Q;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_R;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_S;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_T;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_U;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_V;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_W;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_X;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_Y;
+import static com.github.yqy7.jhotkey.HotKeyVK.VK_Z;
 
 class HotKeyRegisterMac extends HotKeyRegister {
     private static final Logger logger = LoggerFactory.getLogger(HotKeyRegisterMac.class);
@@ -32,6 +78,12 @@ class HotKeyRegisterMac extends HotKeyRegister {
 
     @Override
     protected void init() {
+        try {
+            Toolkit.getDefaultToolkit(); // 触发awt库的加载，如果没有加载的话mac下会有问题
+        } catch (Exception ex) {
+            logger.warn("", ex);
+        }
+
         // 安装HotKey事件处理器
 
         EventTypeSpec[] eventTypes = (EventTypeSpec[])(new EventTypeSpec().toArray(1));
@@ -39,32 +91,28 @@ class HotKeyRegisterMac extends HotKeyRegister {
         eventTypes[0].eventKind = kEventHotKeyPressed;
 
         int status = Carbon.INSTANCE.InstallEventHandler(Carbon.INSTANCE.GetEventDispatcherTarget(),
-            new Eventhandler(), 1, eventTypes, null, eventHandlerOutRef);
+            this::handleHotKeyEvent, 1, eventTypes, null, eventHandlerOutRef);
 
         if (status != 0) {
             logger.error("Install hot key event handler error: " + status);
         }
     }
 
-    class Eventhandler implements EventHandlerProcPtr {
+    // HotKey事件处理器
+    private int handleHotKeyEvent(Pointer inHandlerCallRef, Pointer inEvent, Pointer inUserData) {
+        // 获取事件参数
+        EventHotKeyID eventHotKeyID = new EventHotKeyID();
+        int status = Carbon.INSTANCE.GetEventParameter(inEvent, kEventParamDirectObject, typeEventHotKeyID,
+            null, eventHotKeyID.size(), null, eventHotKeyID);
 
-        @Override
-        public int callback(Pointer inHandlerCallRef, Pointer inEvent, Pointer inUserData) {
-            // 获取事件参数
-            EventHotKeyID eventHotKeyID = new EventHotKeyID();
-            int status = Carbon.INSTANCE.GetEventParameter(inEvent, kEventParamDirectObject, typeEventHotKeyID,
-                null, eventHotKeyID.size(), null, eventHotKeyID);
-
-            System.out.println(eventHotKeyID.id);
-
-            if (status != 0) {
-                logger.error("Get event parameter error: " + status);
-            } else {
-                int id = eventHotKeyID.id;
-                fireEvent(hotKeyMap.get(id));
-            }
-            return 0;
+        if (status != 0) {
+            logger.error("Get event parameter error: " + status);
+        } else {
+            int id = eventHotKeyID.id;
+            fireEvent(hotKeyMap.get(id));
         }
+
+        return 0;
     }
 
     // 注册HotKey
@@ -81,16 +129,12 @@ class HotKeyRegisterMac extends HotKeyRegister {
             KeyMapMac.converKeyCode(hotKey.getKeyCode()), KeyMapMac.convertModifiers(hotKey.getModifiers()),
             hotKeyReference, Carbon.INSTANCE.GetEventDispatcherTarget(), 0, hotKeyOutRef);
 
-        System.out.println("register status: " + status);
-
         if (status != 0) {
             logger.error("Register hot key error: " + status);
-            return;
+        } else {
+            hotKey.setOutRef(hotKeyOutRef);
+            hotKeyMap.put(id, hotKey);
         }
-
-        hotKey.setOutRef(hotKeyOutRef);
-        hotKeyMap.put(id, hotKey);
-        System.out.println(hotKeyMap);
     }
 
     private static int OS_TYPE(String osType) {
@@ -120,6 +164,7 @@ class HotKeyRegisterMac extends HotKeyRegister {
         removeAllHotKey();
         if (eventHandlerOutRef.getValue() != null) {
             Carbon.INSTANCE.RemoveEventHandler(eventHandlerOutRef.getValue());
+            logger.info("Remove HotKey event handler!");
         }
         super.stop();
     }

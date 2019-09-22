@@ -11,7 +11,7 @@ public abstract class HotKeyRegister {
     private static HotKeyRegister INSTANCE;
 
     static {
-        System.setProperty("jna.nosys", "true");
+        //System.setProperty("jna.nosys", "true");
 
         if (Platform.isWindows()) {
             INSTANCE = new HotKeyRegisterWin();
