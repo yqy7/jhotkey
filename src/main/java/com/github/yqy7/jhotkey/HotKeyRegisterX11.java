@@ -1,7 +1,11 @@
 package com.github.yqy7.jhotkey;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import com.sun.jna.platform.unix.X11;
 import com.sun.jna.platform.unix.X11.Display;
@@ -69,10 +73,11 @@ class HotKeyRegisterX11 extends HotKeyRegister {
     private static final X11 x11 = X11.INSTANCE;
 
     private volatile boolean stopped = false;
-    private Map<Integer, HotKey> hotKeyMap = new HashMap<>();
+    private List<HotKey> hotKeyList = new ArrayList<>();
     private Display display;
     private Window window;
     private Thread thread;
+    private CountDownLatch prepareLatch = new CountDownLatch(1);
 
     @Override
     protected void init() {
@@ -82,7 +87,9 @@ class HotKeyRegisterX11 extends HotKeyRegister {
             x11.XSetErrorHandler((display, errorEvent) -> {
                 byte[] buf = new byte[1024];
                 int len = 0;
-                while (buf[len] != 0) { len++; }
+                while (buf[len] != 0) {
+                    len++;
+                }
                 x11.XGetErrorText(display, errorEvent.error_code, buf, buf.length);
                 logger.error("ErrorHandler: " + new String(buf, 0, len));
                 return 0;
@@ -90,28 +97,36 @@ class HotKeyRegisterX11 extends HotKeyRegister {
 
             window = x11.XDefaultRootWindow(display);
 
+            prepareLatch.countDown();
+
             // 监听事件
             XEvent event = new XEvent();
             while (!stopped) {
-                while (x11.XPending(display) > 0) {
+                while(x11.XPending(display) > 0) {
                     x11.XNextEvent(display, event);
                     if (event.type != X11.KeyPress)
                         continue;
 
-                    XKeyEvent xkey = (XKeyEvent)event.readField("xkey");
-                    for (HotKey hotKey : hotKeyMap.values()) {
-                        int state = xkey.state & (ShiftMask | ControlMask | Mod1Mask | Mod4Mask);
+                    XKeyEvent xkey = (XKeyEvent) event.readField("xkey");
+                    int state = xkey.state & (ShiftMask | ControlMask | Mod1Mask | Mod4Mask);
+
+                    for (HotKey hotKey : hotKeyList) {
                         byte keyCode = KeyMapX11.convertKeyCode(hotKey.getKeyCode(), display);
                         int modifiers = KeyMapX11.convertModifiers(hotKey.getModifiers());
-                        if (keyCode == (byte)xkey.keycode && modifiers == state) {
+                        if (keyCode == (byte) xkey.keycode && modifiers == state) {
                             fireEvent(hotKey);
                         }
                     }
                 }
+
+                try {
+                    TimeUnit.MILLISECONDS.sleep(300);
+                } catch (InterruptedException e) {
+                }
             }
 
             x11.XCloseDisplay(display);
-            logger.info("JHotKey Thread is stopped!");
+            logger.info("JHotKey Thread exit.");
         }, "JHotKey Thread");
 
         thread.start();
@@ -119,21 +134,28 @@ class HotKeyRegisterX11 extends HotKeyRegister {
 
     @Override
     protected synchronized void register(HotKey hotKey) {
+        try {
+            prepareLatch.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
         byte keyCode = KeyMapX11.convertKeyCode(hotKey.getKeyCode(), display);
         int modifiers = KeyMapX11.convertModifiers(hotKey.getModifiers());
 
         x11.XGrabKey(display, keyCode, modifiers, window, 1, x11.GrabModeAsync, x11.GrabModeAsync);
+        hotKeyList.add(hotKey);
     }
 
     @Override
     public synchronized void removeAllHotKey() {
-        for (HotKey hotKey : hotKeyMap.values()) {
+        for (HotKey hotKey : hotKeyList) {
             byte keyCode = KeyMapX11.convertKeyCode(hotKey.getKeyCode(), display);
             int modifiers = KeyMapX11.convertModifiers(hotKey.getModifiers());
             x11.XUngrabKey(display, keyCode, modifiers, window);
         }
 
-        hotKeyMap.clear();
+        hotKeyList.clear();
     }
 
     @Override
@@ -225,8 +247,8 @@ class KeyMapX11 {
     }
 
     static byte convertKeyCode(int javaKeyCode, Display display) {
-        byte keycode = x11.XKeysymToKeycode(display,
-            x11.XStringToKeysym(keyCodeMap.get(javaKeyCode)));
+        X11.KeySym keySym = x11.XStringToKeysym(keyCodeMap.get(javaKeyCode));
+        byte keycode = x11.XKeysymToKeycode(display, keySym);
         return keycode;
     }
 }
