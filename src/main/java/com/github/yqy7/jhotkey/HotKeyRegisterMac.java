@@ -64,6 +64,7 @@ import static com.github.yqy7.jhotkey.HotKeyVK.VK_Z;
 
 class HotKeyRegisterMac extends HotKeyRegister {
     private static final Logger logger = LoggerFactory.getLogger(HotKeyRegisterMac.class);
+    private static final Carbon carbon = Carbon.INSTANCE;
 
     private AtomicInteger hotKeyIdGen = new AtomicInteger(1);
     private Map<Integer, MacHotKey> hotKeyMap = new HashMap<>();
@@ -90,7 +91,7 @@ class HotKeyRegisterMac extends HotKeyRegister {
         eventTypes[0].eventClass = kEventClassKeyboard;
         eventTypes[0].eventKind = kEventHotKeyPressed;
 
-        int status = Carbon.INSTANCE.InstallEventHandler(Carbon.INSTANCE.GetEventDispatcherTarget(),
+        int status = carbon.InstallEventHandler(carbon.GetEventDispatcherTarget(),
             this::handleHotKeyEvent, 1, eventTypes, null, eventHandlerOutRef);
 
         if (status != 0) {
@@ -98,11 +99,11 @@ class HotKeyRegisterMac extends HotKeyRegister {
         }
     }
 
-    // HotKey事件处理器
+    // HotKey事件处理器，会由AppKit Thread线程执行
     private int handleHotKeyEvent(Pointer inHandlerCallRef, Pointer inEvent, Pointer inUserData) {
         // 获取事件参数
         EventHotKeyID eventHotKeyID = new EventHotKeyID();
-        int status = Carbon.INSTANCE.GetEventParameter(inEvent, kEventParamDirectObject, typeEventHotKeyID,
+        int status = carbon.GetEventParameter(inEvent, kEventParamDirectObject, typeEventHotKeyID,
             null, eventHotKeyID.size(), null, eventHotKeyID);
 
         if (status != 0) {
@@ -125,9 +126,9 @@ class HotKeyRegisterMac extends HotKeyRegister {
 
         PointerByReference hotKeyOutRef = new PointerByReference();
 
-        int status = Carbon.INSTANCE.RegisterEventHotKey(
+        int status = carbon.RegisterEventHotKey(
             KeyMapMac.converKeyCode(hotKey.getKeyCode()), KeyMapMac.convertModifiers(hotKey.getModifiers()),
-            hotKeyReference, Carbon.INSTANCE.GetEventDispatcherTarget(), 0, hotKeyOutRef);
+            hotKeyReference, carbon.GetEventDispatcherTarget(), 0, hotKeyOutRef);
 
         if (status != 0) {
             logger.error("Register hot key error: " + status);
@@ -150,7 +151,7 @@ class HotKeyRegisterMac extends HotKeyRegister {
     @Override
     public synchronized void removeAllHotKey() {
         for (MacHotKey hotKey : hotKeyMap.values()) {
-            int status = Carbon.INSTANCE.UnregisterEventHotKey(hotKey.getOutRef().getValue());
+            int status = carbon.UnregisterEventHotKey(hotKey.getOutRef().getValue());
             if (status != 0) {
                 logger.warn("Unregister HotKey error: " + status);
             }
@@ -163,7 +164,7 @@ class HotKeyRegisterMac extends HotKeyRegister {
     public synchronized void stop() {
         removeAllHotKey();
         if (eventHandlerOutRef.getValue() != null) {
-            Carbon.INSTANCE.RemoveEventHandler(eventHandlerOutRef.getValue());
+            carbon.RemoveEventHandler(eventHandlerOutRef.getValue());
             logger.info("Remove HotKey event handler!");
         }
         super.stop();

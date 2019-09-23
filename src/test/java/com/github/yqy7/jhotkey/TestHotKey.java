@@ -22,6 +22,7 @@ public class TestHotKey {
         HotKeyRegister instance = HotKeyRegister.getInstance();
         instance.register("ctrl J", hotKey -> {
             System.out.println("press hotkey: " + hotKey);
+            System.out.println(Thread.currentThread());
         });
 
         Thread.sleep(10000);

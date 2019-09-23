@@ -22,7 +22,7 @@ public abstract class HotKeyRegister {
         }
 
         if (Platform.isLinux()) {
-            INSTANCE = new HotKeyRegisterLinux();
+            INSTANCE = new HotKeyRegisterX11();
         }
 
         INSTANCE.init();

@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 
 class HotKeyRegisterWin extends HotKeyRegister {
     private static final Logger logger = LoggerFactory.getLogger(HotKeyRegisterWin.class);
+    private static final User32 user32 = User32.INSTANCE;
+    private static final Kernel32 kernel32 = Kernel32.INSTANCE;
 
     private static int WM_USER_REGISTER_HOTKEY = 1;
     private static int WM_USER_CLEAR_HOTKEY = 2;
@@ -35,13 +37,13 @@ class HotKeyRegisterWin extends HotKeyRegister {
         Thread thread = new Thread(() -> {
             MSG msg = new MSG();
 
-            User32.INSTANCE.PeekMessage(msg, null, 0, 0, 1); // 触发一下，使线程变成GUI线程
-            nativeThreadId = Kernel32.INSTANCE.GetCurrentThreadId();
+            user32.PeekMessage(msg, null, 0, 0, 1); // 触发一下，使线程变成GUI线程
+            nativeThreadId = kernel32.GetCurrentThreadId();
 
             prepareLatch.countDown(); // 准备完成，可以注册了
 
             // 消息循环
-            while (User32.INSTANCE.GetMessage(msg, null, 0, 0) != 0) {
+            while (user32.GetMessage(msg, null, 0, 0) != 0) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("Windows Message: \n" + msg.toString());
                 }
@@ -77,7 +79,7 @@ class HotKeyRegisterWin extends HotKeyRegister {
     // 清除所有注册的 hotkey
     private void clearHotKeys() {
         for (Integer id : hotKeyMap.keySet()) {
-            User32.INSTANCE.UnregisterHotKey(null, id);
+            user32.UnregisterHotKey(null, id);
         }
         hotKeyMap.clear();
     }
@@ -85,7 +87,7 @@ class HotKeyRegisterWin extends HotKeyRegister {
     // 注册hotkey
     private void registerHotKey(HotKey hotKey) {
         int id = hotKeyIdGen.getAndIncrement();
-        if (User32.INSTANCE.RegisterHotKey(null, id,
+        if (user32.RegisterHotKey(null, id,
             KeyMapWin.convertModifiers(hotKey.getModifiers()),
             KeyMapWin.converKeyCode(hotKey.getKeyCode()))) {
             hotKeyMap.put(id, hotKey);
@@ -104,7 +106,7 @@ class HotKeyRegisterWin extends HotKeyRegister {
             e.printStackTrace();
         }
 
-        User32.INSTANCE.PostThreadMessage(nativeThreadId, WinUser.WM_USER, new WPARAM(WM_USER_REGISTER_HOTKEY),
+        user32.PostThreadMessage(nativeThreadId, WinUser.WM_USER, new WPARAM(WM_USER_REGISTER_HOTKEY),
             new LPARAM());
     }
 
@@ -116,7 +118,7 @@ class HotKeyRegisterWin extends HotKeyRegister {
             e.printStackTrace();
         }
 
-        User32.INSTANCE.PostThreadMessage(nativeThreadId, WinUser.WM_USER, new WPARAM(WM_USER_CLEAR_HOTKEY),
+        user32.PostThreadMessage(nativeThreadId, WinUser.WM_USER, new WPARAM(WM_USER_CLEAR_HOTKEY),
             new LPARAM());
     }
 
@@ -128,7 +130,7 @@ class HotKeyRegisterWin extends HotKeyRegister {
             e.printStackTrace();
         }
 
-        User32.INSTANCE.PostThreadMessage(nativeThreadId, WinUser.WM_CLOSE, new WPARAM(), new LPARAM());
+        user32.PostThreadMessage(nativeThreadId, WinUser.WM_CLOSE, new WPARAM(), new LPARAM());
         super.stop();
     }
 
